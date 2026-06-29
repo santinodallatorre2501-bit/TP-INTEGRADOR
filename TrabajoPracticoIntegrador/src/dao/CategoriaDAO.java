@@ -9,5 +9,7 @@ package dao;
  * @author valen
  */
 public class CategoriaDAO {
+    hola
+
     
 }

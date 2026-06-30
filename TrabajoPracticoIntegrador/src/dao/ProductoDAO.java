@@ -4,10 +4,13 @@
  */
 package dao;
 
+import java.util.List;
+
 /**
  *
  * @author valen
  */
-public class ProductoDAO {
-    
+public interface ProductoDAO extends IBaseDAO {
+
+    List<Producto> findByCategoriaId(Long categoriaId) throws Exception;
 }

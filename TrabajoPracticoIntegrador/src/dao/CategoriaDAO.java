@@ -4,10 +4,13 @@
  */
 package dao;
 
+import java.util.Optional;
+
 /**
  *
  * @author valen
  */
-public class CategoriaDAO {
-    
+public interface CategoriaDAO extends IBaseDAO{
+
+    Optional<Categoria> findByNombre(String nombre) throws Exception;
 }

@@ -8,6 +8,6 @@ package entities;
  *
  * @author valen
  */
-public interface Calculable {
-    void calcularTotal();
+public class Calculable {
+    
 }

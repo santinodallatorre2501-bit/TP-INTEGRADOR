@@ -1,1 +1,15 @@
 /TrabajoPracticoIntegrador/nbproject/private/
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Archivos temporales
+*.tmp

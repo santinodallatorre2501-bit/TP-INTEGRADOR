@@ -5,26 +5,23 @@
 package entities;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *
  * @author valen
  */
 public abstract class Base {
-    
-    private Long id;
-    private boolean eliminado;
-    private LocalDateTime createdAt;
+    private static final AtomicLong ID_GENERATOR = new AtomicLong(1);
+
+    protected Long id;
+    protected boolean eliminado;
+    protected LocalDateTime createdAt;
 
     public Base() {
+        this.id = ID_GENERATOR.getAndIncrement();
         this.eliminado = false;
         this.createdAt = LocalDateTime.now();
-    }
-
-    public Base(Long id, boolean eliminado, LocalDateTime createdAt) {
-        this.id = id;
-        this.eliminado = eliminado;
-        this.createdAt = createdAt;
     }
 
     public Long getId() {
@@ -47,14 +44,16 @@ public abstract class Base {
         return createdAt;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Base base = (Base) o;
+        return id != null && id.equals(base.id);
     }
 
     @Override
-    public String toString() {
-        return "Base{" + "id=" + id + ", eliminado=" + eliminado + ", createdAt=" + createdAt + '}';
+    public int hashCode() {
+        return id == null ? 0 : id.hashCode();
     }
-
-   
 }

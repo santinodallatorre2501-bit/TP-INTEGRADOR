@@ -9,13 +9,9 @@ package exception;
  * @author valen
  */
 public class EntityNotFoundException extends RuntimeException{
-    /**
-     * Constructor que recibe el mensaje de error.
-     * @param mensaje El texto que explica qué fue lo que no se encontró.
-     */
+  
     public EntityNotFoundException(String mensaje) {
-        // La palabra reservada 'super' le pasa el mensaje a la clase padre (RuntimeException)
-        // para que Java sepa cómo procesar el texto del error.
+       
         super(mensaje);
     }
 }

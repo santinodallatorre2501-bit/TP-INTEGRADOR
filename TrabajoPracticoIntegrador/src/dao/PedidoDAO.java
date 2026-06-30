@@ -23,6 +23,7 @@ import java.util.ArrayList;
  */
 public class PedidoDAO implements IBaseDAO<Pedido> {
 
+    //Sentencias para enviar consultas a la base de datos
     private static final String INSERT_PEDIDO = "INSERT INTO pedidos (eliminado, created_at, fecha, estado, total, forma_pago, usuario_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
     private static final String INSERT_DETALLE = "INSERT INTO detalle_pedidos (eliminado, created_at, cantidad, subtotal, producto_id, pedido_id) VALUES (?, ?, ?, ?, ?, ?)";
     private static final String SELECT_PEDIDO_POR_ID = "SELECT * FROM pedidos WHERE id = ?";
@@ -32,22 +33,21 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
     
     @Override
     public void crear(Pedido entidad) {
-        // Preparamos la variable para guardar la "llamada" a la base de datos
+        // Variable para llamar a la base de datos
         Connection conn = null;
 
         try {
-            // 1. ABRIR CONEXIÓN Y CONFIGURAR TRANSACCIÓN
-            // Llamamos a tu clase para conectarnos a MySQL
+            // Llamamos a la clase ConexionDB para justamente hacer la conexión con la base de datos
             conn = ConexionDB.getConexion();
 
-            // ¡Fundamental! Le decimos a MySQL: "Anotá en lápiz, no guardes nada hasta que yo te avise"
+            // Con esto, le decimos a la base de datos que no se guarde automáticamente, asi, si hay
+            // un fallo en la mitad del proceso, no se guarden datos a la mitad, sino que se elimine todo.
             conn.setAutoCommit(false);
 
-            // 2. GUARDAR EL PEDIDO (EL "TICKET" PRINCIPAL)
-            // Preparamos la consulta y le exigimos a MySQL que nos devuelva el ID que genere
+
+            // Acá armamos la consulta a MySQL con la variable hecha al inicio, y pasamos los datos para cada valor para crear el pedido
             try (PreparedStatement pstmtPedido = conn.prepareStatement(INSERT_PEDIDO, PreparedStatement.RETURN_GENERATED_KEYS)) {
 
-                // Rellenamos los 7 huecos (?) de la consulta INSERT_PEDIDO
                 pstmtPedido.setBoolean(1, false); // eliminado
                 pstmtPedido.setTimestamp(2, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now())); // created_at (Hora del sistema)
                 pstmtPedido.setDate(3, java.sql.Date.valueOf(entidad.getFecha())); // fecha comercial (Convertida para MySQL)
@@ -56,11 +56,10 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
                 pstmtPedido.setString(6, entidad.getFormaPago().name()); // forma_pago (Convertimos el Enum a texto)
                 pstmtPedido.setLong(7, entidad.getUsuario().getId()); // ID del cliente asociado
 
-                // Disparamos la consulta a la memoria temporal de MySQL
+                // Enviamos la consulta
                 pstmtPedido.executeUpdate();
 
-                // 3. RECUPERAR EL ID GENERADO
-                // Le pedimos a MySQL la clave (el numerito) que acaba de inventar para este pedido
+                // Le pedimos a MySQL que nos de el id generado para el pedido que creamos
                 ResultSet rs = pstmtPedido.getGeneratedKeys();
                 Long idPedidoGenerado = null;
 
@@ -70,45 +69,39 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
                     entidad.setId(idPedidoGenerado);
                 }
 
-                // 4. GUARDAR LOS DETALLES (LOS RENGLONES DEL TICKET)
-                // Preparamos el segundo molde usando la constante INSERT_DETALLE
+                // Ahora armamos la consulta para asignar valores a los detalles del pedido creado
                 try (PreparedStatement pstmtDetalle = conn.prepareStatement(INSERT_DETALLE)) {
 
-                    // Recorremos el "changuito" elemento por elemento
                     for (DetallePedido detalle : entidad.getDetalles()) {
 
-                        // Llenamos los huecos (?) para CADA detalle
                         pstmtDetalle.setBoolean(1, false); // eliminado
                         pstmtDetalle.setTimestamp(2, java.sql.Timestamp.valueOf(java.time.LocalDateTime.now())); // created_at
                         pstmtDetalle.setInt(3, detalle.getCantidad()); // cantidad
                         pstmtDetalle.setDouble(4, detalle.getSubtotal()); // subtotal
                         pstmtDetalle.setLong(5, detalle.getProducto().getId()); // ID del producto comprado
 
-                        // ¡Clave! Asociamos este detalle al pedido usando el ID que recuperamos arriba
+                        // Usando el id que recibimos del pedido creado, le asignamos este detalle
                         pstmtDetalle.setLong(6, idPedidoGenerado);
 
-                        // Disparamos este renglón a la memoria temporal
+                        // Enviamos la consulta
                         pstmtDetalle.executeUpdate();
                     }
                 } // Acá se cierra y limpia el pstmtDetalle automáticamente
 
             } // Acá se cierra y limpia el pstmtPedido automáticamente
 
-            // 5. CONFIRMAR LA TRANSACCIÓN (COMMIT)
-            // Si el código llegó vivo hasta acá, significa que no hubo ningún error.
-            // Le damos la orden final a MySQL: "¡Pasá todo a tinta, guardalo en el disco duro!"
+            // Si no hubo errores en el camino, le confirmamos a MySQL que ahora si guarde estos cambios
             conn.commit();
             System.out.println("¡Éxito! Pedido y detalles guardados correctamente en la Base de Datos.");
 
         } catch (SQLException e) {
 
-            // 6. MANEJO DE ERRORES (ROLLBACK)
-            // Si algo explotó (ej: se cortó internet a mitad del for-each), el código salta directo acá
+            // Si hubo algún error en la conexión, lo atajamos acá
             System.err.println("Ocurrió un error al guardar. Cancelando operación... Detalles: " + e.getMessage());
 
             if (conn != null) {
                 try {
-                    // El famoso "Ctrl+Z". Le decimos a MySQL que borre lo que tenía en lápiz
+                    // Acá damos la orden para que eso que se estaba escribiendo, se borre y no se guarde o modifique en la base de datos
                     conn.rollback();
                     System.out.println("Rollback exitoso: La base de datos no fue modificada.");
                 } catch (SQLException ex) {
@@ -118,9 +111,7 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
 
         } finally {
 
-            // 7. CERRAR LA CONEXIÓN
-            // Este bloque se ejecuta SIEMPRE, haya habido éxito o error.
-            // Es vital para "colgar el teléfono" y no saturar a MySQL de conexiones fantasmas.
+            // Cerramos la conexión con la base de datos, haya sido exitosa o errónea
             if (conn != null) {
                 try {
                     conn.close();
@@ -133,46 +124,46 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
 
     @Override
     public Pedido obtenerPorId(Long id) {
-        // 1. Preparamos una variable vacía. Si no encontramos el pedido, devolverá null.
+        // Preparamos una variable vacía. Si no encontramos el pedido, devolverá null.
         Pedido pedidoEncontrado = null;
         Connection conn = null;
 
         try {
-            // 2. Abrimos la conexión a MySQL
+            // Abrimos la conexión a MySQL
             conn = ConexionDB.getConexion();
 
-            // 3. Preparamos la consulta y rellenamos el hueco (?) con el ID que buscamos
+            // Armamos la consulta y mandamos el ID buscado al valor que corresponde
             try (PreparedStatement pstmt = conn.prepareStatement(SELECT_PEDIDO_POR_ID)) {
 
-                pstmt.setLong(1, id); // Metemos el ID en el hueco
+                pstmt.setLong(1, id); 
 
-                // 4. ¡OJO ACÁ! Usamos executeQuery() porque esperamos que MySQL nos DEVUELVA datos
+                // Usamos executeQuery porque esperamos que nos devuelvan datos
                 ResultSet rs = pstmt.executeQuery();
 
-                // 5. rs.next() pregunta: "¿MySQL encontró alguna fila con ese ID?"
+                // Vemos si encontramos alguna fila con este id
                 if (rs.next()) {
 
-                    // 6. Si la encontró, empezamos a desarmar la fila sacando los datos columna por columna
+                    // Si la encontró, empezamos a desarmar la fila sacando los datos columna por columna
                     Long idPedido = rs.getLong("id");
                     boolean eliminado = rs.getBoolean("eliminado");
                     java.time.LocalDateTime createdAt = rs.getTimestamp("created_at").toLocalDateTime();
                     java.time.LocalDate fecha = rs.getDate("fecha").toLocalDate();
 
-                    // Los Enum se recuperan como texto (String) y se vuelven a convertir a Enum con valueOf()
+                    // Los Enum se recuperan como String y se vuelven a convertir a Enum con valueOf()
                     Estado estado = Estado.valueOf(rs.getString("estado"));
                     Double total = rs.getDouble("total");
                     FormaPago formaPago = FormaPago.valueOf(rs.getString("forma_pago"));
 
-                    // 1. Agarramos de tu tabla pedidos el ID del cliente que compró
+                    // Sacamos de la tabla el id del usuario
                     Long idDelUsuario = rs.getLong("usuario_id");
 
-                    // 2. Instanciamos el DAO de tu compañero
+                    // Instanciamos el DAO de usuario para crear un objeto usuario, con el usuario que corresponde
                     UsuarioDAO usuarioDAO = new UsuarioDAO();
 
-                    // 3. Le pedimos a SU código que vaya a la base de datos y nos arme el objeto
+                    // El DAO obitene por el id el usuario completo, y pasa sus datos a esta variable nueva
                     Usuario usuarioReal = usuarioDAO.obtenerPorId(idDelUsuario);
 
-                    // 4. ENSAMBLAJE: Ahora sí, pasamos el "usuarioReal" en vez del null
+                    // Ahora enviamos todos los datos para instanciar el pedido buscado
                     pedidoEncontrado = new Pedido(fecha, estado, total, formaPago, usuarioReal, idPedido, eliminado, createdAt);
 
                 }
@@ -181,7 +172,7 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
         } catch (SQLException e) {
             System.err.println("Error al buscar el pedido en la base de datos: " + e.getMessage());
         } finally {
-            // 8. Como siempre, cerramos la conexión al terminar
+            // Cerramos conexión
             if (conn != null) {
                 try {
                     conn.close();
@@ -191,28 +182,28 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
             }
         }
 
-        // 9. Devolvemos el pedido armado (o null si no existía el ID)
+        // Devolvemos el pedido armado o null si no existía el ID
         return pedidoEncontrado;
     }
 
     @Override
     public List<Pedido> listarTodos() {
-        // 1. Creamos una lista vacía donde vamos a meter todos los pedidos que encontremos
+        // Creamos una lista vacía donde vamos a meter todos los pedidos que encontremos
         List<Pedido> listaPedidos = new ArrayList<>();
         Connection conn = null;
 
         try {
             conn = ConexionDB.getConexion();
 
-            // 2. Usamos el SELECT_ALL que no lleva parámetros porque trae todo
+            // Mandamos la consulta para traer todos los datos de la base de datos
             try (PreparedStatement pstmt = conn.prepareStatement(SELECT_ALL_PEDIDOS)) {
 
                 ResultSet rs = pstmt.executeQuery();
 
-                // 3. ¡EL WHILE! Mientras haya una fila nueva en la tabla, el código sigue dando vueltas
+                // Mientras haya una fila nueva, el ciclo sigue
                 while (rs.next()) {
 
-                    // 4. Desarmamos la fila (igual que hicimos en obtenerPorId)
+                    // Desarmamos la fila
                     Long idPedido = rs.getLong("id");
                     boolean eliminado = rs.getBoolean("eliminado");
                     java.time.LocalDateTime createdAt = rs.getTimestamp("created_at").toLocalDateTime();
@@ -226,10 +217,10 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
                     UsuarioDAO usuarioDAO = new UsuarioDAO();
                     Usuario usuarioReal = usuarioDAO.obtenerPorId(idDelUsuario);
 
-                    // 5. ENSAMBLAJE
+                    // Armamos el pedido
                     Pedido pedidoArmado = new Pedido(fecha, estado, total, formaPago, usuarioReal, idPedido, eliminado, createdAt);
 
-                    // 6. ¡Lo metemos a la bolsa!
+                    // Añadimos en la lista de pedidos
                     listaPedidos.add(pedidoArmado);
                 }
             }
@@ -246,7 +237,7 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
             }
         }
 
-        // 7. Devolvemos la lista llena (o vacía si no había nada)
+        // Devolvemos la lista llena o vacía si no había nada
         return listaPedidos;
     }
 
@@ -257,20 +248,17 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
         try {
             conn = ConexionDB.getConexion();
 
-            // 1. Preparamos el update usando la constante nueva
+            // Preparamos la consulta para actualizar
             try (PreparedStatement pstmt = conn.prepareStatement(UPDATE_PEDIDO)) {
 
-                // 2. Rellenamos los 5 campos que vamos a modificar
                 pstmt.setDate(1, java.sql.Date.valueOf(entidad.getFecha()));
                 pstmt.setString(2, entidad.getEstado().name());
                 pstmt.setDouble(3, entidad.getTotal());
                 pstmt.setString(4, entidad.getFormaPago().name());
                 pstmt.setLong(5, entidad.getUsuario().getId());
-
-                // 3. ¡IMPORTANTE! El ID va al final, en el WHERE, para decirle a MySQL CUÁL fila editar
                 pstmt.setLong(6, entidad.getId());
 
-                // 4. Ejecutamos la actualización
+                // Ejecutamos la consulta
                 int filasAfectadas = pstmt.executeUpdate();
 
                 if (filasAfectadas > 0) {
@@ -299,13 +287,13 @@ public class PedidoDAO implements IBaseDAO<Pedido> {
         try {
             conn = ConexionDB.getConexion();
 
-            // 1. Preparamos el update de borrado lógico
+            // Preparamos la consulta para eliminar
             try (PreparedStatement pstmt = conn.prepareStatement(DELETE_PEDIDO)) {
 
-                // 2. Le pasamos el ID del pedido que queremos "dar de baja"
+                // Le pasamos el ID del pedido que queremos borrar
                 pstmt.setLong(1, id);
 
-                // 3. Ejecutamos
+                // Ejecutamos
                 int filasAfectadas = pstmt.executeUpdate();
 
                 if (filasAfectadas > 0) {

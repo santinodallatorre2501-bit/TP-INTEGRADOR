@@ -21,12 +21,12 @@ public class ConexionDB {
     // Tu usuario de MySQL (por defecto suele ser root)
     private static final String USUARIO = "root";
     
-    // ¡ATENCIÓN! Reemplaza este valor por tu contraseña real de MySQL
+    // Reemplaza este valor por tu contraseña real de MySQL
     private static final String PASSWORD = "root"; 
 
     /**
      * Método estático para obtener la conexión a la base de datos.
-     * Al ser estático, podemos llamarlo sin necesidad de instanciar (crear un objeto de) esta clase.
+     * Al ser estático, podemos llamarlo sin necesidad de instanciar un objeto de esta clase.
      * * @return Connection si la conexión es exitosa, o null si falla.
      */
     public static Connection getConexion() {
